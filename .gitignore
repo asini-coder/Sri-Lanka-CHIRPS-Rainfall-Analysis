@@ -1,0 +1,12 @@
+__pycache__/
+.ipynb_checkpoints/
+*.pyc
+.DS_Store
+.venv/
+.env
+data/ground/
+data/processed/
+data/chirps/
+data/era5/
+data/copernicus/
+data/enso/
