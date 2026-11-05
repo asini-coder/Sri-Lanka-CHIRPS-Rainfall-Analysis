@@ -1,0 +1,225 @@
+
+/*
+==================================================
+ SRI LANKA RAINFALL RESEARCH
+ PHASE 3: ATMOSPHERIC PHYSICS
+
+ ERA5 DAILY — SIX STATIONS
+ PERIOD: 1981–2000
+
+ Extracts five atmospheric variables:
+ 1. U10_ms              (m/s)
+ 2. V10_ms              (m/s)
+ 3. Temperature_K       (Kelvin)
+ 4. Dewpoint_K          (Kelvin)
+ 5. Surface_Pressure_Pa  (Pascal)
+
+ Uses one multiband station-sampling operation
+ per year to reduce concurrent aggregations.
+==================================================
+*/
+
+
+// ==========================================
+// 1. EXPORT SETTINGS
+// ==========================================
+
+// Options: 'SINGLE' or 'ALL'
+var MODE = 'ALL';
+
+// Used only when MODE = 'SINGLE'
+var SINGLE_YEAR = 1982;
+
+// Used only when MODE = 'ALL'
+var FIRST_YEAR = 1982;
+var LAST_YEAR = 2000;
+
+
+// ==========================================
+// 2. SIX SRI LANKAN RAINFALL STATIONS
+// ==========================================
+
+var stations = ee.FeatureCollection([
+
+  ee.Feature(
+    ee.Geometry.Point([81.05, 6.98]),
+    {Station: 'Badulla'}
+  ),
+
+  ee.Feature(
+    ee.Geometry.Point([79.87, 6.90]),
+    {Station: 'Colombo'}
+  ),
+
+  ee.Feature(
+    ee.Geometry.Point([80.22, 6.03]),
+    {Station: 'Galle'}
+  ),
+
+  ee.Feature(
+    ee.Geometry.Point([80.63, 7.33]),
+    {Station: 'Kandy'}
+  ),
+
+  ee.Feature(
+    ee.Geometry.Point([80.77, 6.97]),
+    {Station: 'Nuwaraeliya'}
+  ),
+
+  ee.Feature(
+    ee.Geometry.Point([79.83, 8.03]),
+    {Station: 'Puttalam'}
+  )
+
+]);
+
+
+// ==========================================
+// 3. DEFINE ERA5 VARIABLES
+// ==========================================
+
+var originalBands = [
+  'u_component_of_wind_10m',
+  'v_component_of_wind_10m',
+  'mean_2m_air_temperature',
+  'dewpoint_2m_temperature',
+  'surface_pressure'
+];
+
+var renamedBands = [
+  'U10_ms',
+  'V10_ms',
+  'Temperature_K',
+  'Dewpoint_K',
+  'Surface_Pressure_Pa'
+];
+
+
+// ==========================================
+// 4. FUNCTION TO EXPORT ONE YEAR
+// ==========================================
+
+function exportERA5Year(year) {
+
+  var startDate = ee.Date.fromYMD(year, 1, 1);
+
+  var endDate = startDate.advance(1, 'year');
+
+  // Load ERA5 DAILY
+  var era5 = ee.ImageCollection(
+    'ECMWF/ERA5/DAILY'
+  )
+  .filterDate(startDate, endDate)
+  .select(originalBands, renamedBands);
+
+
+  // Assign date identifiers to all images
+  var datedERA5 = era5.map(function(image) {
+
+    var dateID = image.date().format('YYYYMMdd');
+
+    return image.set('system:index', dateID);
+
+  });
+
+
+  // Stack daily observations into one image
+  var stackedImage = datedERA5.toBands();
+
+
+  // Sample all six stations once
+  var sampled = stackedImage.sampleRegions({
+
+    collection: stations,
+
+    properties: ['Station'],
+
+    scale: 27830,
+
+    geometries: false,
+
+    tileScale: 4
+
+  });
+
+
+  // Export one CSV per year
+  Export.table.toDrive({
+
+    collection: sampled,
+
+    description: 'ERA5_Atmosphere_' + year,
+
+    folder: 'ERA5 Data',
+
+    fileNamePrefix:
+      'ERA5_Six_Stations_' + year + '_Wide',
+
+    fileFormat: 'CSV'
+
+  });
+
+  print('Export task prepared for:', year);
+}
+
+
+// ==========================================
+// 5. RUN SINGLE YEAR OR ALL YEARS
+// ==========================================
+
+if (MODE === 'SINGLE') {
+
+  exportERA5Year(SINGLE_YEAR);
+
+} else if (MODE === 'ALL') {
+
+  // This is ordinary JavaScript, not ee.List.
+  // Export tasks must be created client-side.
+
+  for (
+    var year = FIRST_YEAR;
+    year <= LAST_YEAR;
+    year++
+  ) {
+
+    exportERA5Year(year);
+
+  }
+
+} else {
+
+  print(
+    'ERROR: MODE must be SINGLE or ALL'
+  );
+
+}
+
+
+// ==========================================
+// 6. DISPLAY STATION LOCATIONS
+// ==========================================
+
+Map.centerObject(stations, 8);
+
+Map.addLayer(
+  stations,
+  {color: 'red'},
+  'Six Rainfall Stations'
+);
+
+
+// ==========================================
+// 7. FINAL INFORMATION
+// ==========================================
+
+print('ERA5 Dataset: ECMWF/ERA5/DAILY');
+
+print('Export mode:', MODE);
+
+print('Number of stations:', stations.size());
+
+print('Atmospheric variables:', renamedBands);
+
+print(
+  'Export tasks are prepared. Open Tasks to submit them.'
+);
